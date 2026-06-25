@@ -9,9 +9,23 @@ targets:
 
 resources:
 
+  schemas:
+    training_schema_bronze:
+      name: "${workspace.current_user.short_name}_bronze"
+      catalog_name: tesco_bank_training
+    training_schema_silver:
+      name: "${workspace.current_user.short_name}_silver"
+      catalog_name: tesco_bank_training
+    training_schema_gold:
+      name: "${workspace.current_user.short_name}_gold"
+      catalog_name: tesco_bank_training
+    training_schema_sandbox:
+      name: "${workspace.current_user.short_name}_sandbox"
+      catalog_name: tesco_bank_training
+
   jobs:
     training_pipeline:
-      name: training_pipeline_${workspace.current_user.userName}
+      name: "${workspace.current_user.short_name}_training_pipeline"
 
       git_source:
         git_url: https://github.com/DavidHerbertInov8/tbtraining_databricks.git
