@@ -2,15 +2,12 @@
 # MAGIC %md
 # MAGIC ## Bronze: Data Ingestion
 # MAGIC
-# MAGIC **Task:** Read the raw transactions CSV and write it to your personal bronze schema as a managed Delta table.
+# MAGIC Reads all three source datasets from the shared `datasets` schema and
+# MAGIC writes them to the trainee's personal bronze schema as managed Delta tables.
 # MAGIC
-# MAGIC **Requirements:**
-# MAGIC - Preserve the raw data exactly as it landed (no cleaning here)
-# MAGIC - Add two audit columns: `_ingested_at` and `_source_file`
-# MAGIC - Write as a managed Delta table to your bronze schema
-# MAGIC - Add a row count assertion at the end
-# MAGIC
-# MAGIC **Enter your schema name in the widget below before running.**
+# MAGIC - Preserves raw data exactly as-is
+# MAGIC - Adds two audit columns: `_ingested_at` and `_source_file`
+# MAGIC - Writes with `overwrite` mode for idempotent re-runs
 
 # COMMAND ----------
 
@@ -20,68 +17,55 @@ user_schema = dbutils.widgets.get("user_schema").strip()
 if not user_schema:
     raise ValueError("Please enter your schema name in the widget above before running.")
 
-CATALOG       = "tesco_bank_training"
+CATALOG        = "tesco_bank_training"
+SOURCE_SCHEMA  = "datasets"
+BRONZE_SCHEMA  = f"{user_schema}_bronze"
+
+print(f"Source:  {CATALOG}.{SOURCE_SCHEMA}")
+print(f"Target:  {CATALOG}.{BRONZE_SCHEMA}")
+
+# COMMAND ----------
+
+dbutils.widgets.text("user_schema", "", "Your schema name (e.g. user_david_herbert)")
+user_schema = dbutils.widgets.get("user_schema").strip()
+
+if not user_schema:
+    raise ValueError(
+        "Please enter your schema name in the widget above before running."
+    )
+
+CATALOG = "tesco_bank_training"
+SOURCE_SCHEMA = "datasets"
 BRONZE_SCHEMA = f"{user_schema}_bronze"
-RAW_PATH      = "s3://databricks-inov8-training-sandbox/raw-data/transactions.csv"
 
-print(f"Target table: {CATALOG}.{BRONZE_SCHEMA}.transactions")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 1: Read the raw CSV
-# MAGIC
-# MAGIC Use `spark.read` to load the CSV from `RAW_PATH`.
-# MAGIC Use `inferSchema` and `header` options.
-# MAGIC Print the row count and display a sample.
+print(f"Source:  {CATALOG}.{SOURCE_SCHEMA}")
+print(f"Target:  {CATALOG}.{BRONZE_SCHEMA}")
 
 # COMMAND ----------
 
-# TODO: Read the raw CSV into a DataFrame
-# Hint: spark.read.format("csv").option(...).load(RAW_PATH)
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 2: Add audit columns
-# MAGIC
-# MAGIC Add two new columns to the DataFrame:
-# MAGIC - `_ingested_at`: the current timestamp
-# MAGIC - `_source_file`: the literal string `"transactions.csv"`
-# MAGIC
-# MAGIC Hint: you will need to import functions from `pyspark.sql.functions`
+print(spark.sql("SELECT current_user()").collect())
+print(spark.sql("SHOW CATALOGS").collect())
 
 # COMMAND ----------
 
-# TODO: Add _ingested_at and _source_file columns
+from pyspark.sql.functions import current_timestamp, lit
 
+TABLES = ["customers", "transactions", "repayments"]
 
-# COMMAND ----------
+for table_name in TABLES:
+    source = f"{CATALOG}.{SOURCE_SCHEMA}.{table_name}"
+    target = f"{CATALOG}.{BRONZE_SCHEMA}.{table_name}"
 
-# MAGIC %md
-# MAGIC ### Step 3: Write to bronze Delta table
-# MAGIC
-# MAGIC Write the DataFrame as a managed Delta table.
-# MAGIC Use `overwrite` mode so the notebook can be re-run idempotently.
+    df = (
+        spark.table(source)
+        .withColumn("_ingested_at", current_timestamp())
+        .withColumn("_source_file", lit(table_name))
+    )
 
-# COMMAND ----------
+    df.write.format("delta").mode("overwrite").saveAsTable(target)
 
-# TODO: Write to Delta table
-# Hint: .write.format("delta").mode("overwrite").saveAsTable(...)
+    count = spark.table(target).count()
+    assert count > 0, f"Bronze write produced an empty table for {table_name}."
+    print(f"  {target}: {count} rows")
 
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 4: Row count assertion
-# MAGIC
-# MAGIC Read back the table and assert the row count is greater than zero.
-# MAGIC This will cause the job to fail loudly if something went wrong.
-
-# COMMAND ----------
-
-# TODO: Add row count assertion
-# Hint: use spark.table(...).count() and assert
-
-
+print("Bronze ingest complete.")

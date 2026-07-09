@@ -8,7 +8,6 @@ targets:
       host: https://dbc-0e43ddc6-9583.cloud.databricks.com
 
 resources:
-
   schemas:
     training_schema_bronze:
       name: "${workspace.current_user.short_name}_bronze"
@@ -27,12 +26,17 @@ resources:
     training_pipeline:
       name: "${workspace.current_user.short_name}_training_pipeline"
 
+      parameters:
+        - name: user_schema
+          default: "${workspace.current_user.short_name}"
+
       job_clusters:
         - job_cluster_key: training_cluster
           new_cluster:
             spark_version: 15.4.x-scala2.12
             node_type_id: m5.xlarge
             num_workers: 1
+            data_security_mode: USER_ISOLATION
             aws_attributes:
               availability: SPOT
               first_on_demand: 1

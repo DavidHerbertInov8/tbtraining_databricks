@@ -2,13 +2,18 @@
 # MAGIC %md
 # MAGIC ## Gold: Aggregation and Risk Profiling
 # MAGIC
-# MAGIC **Task:** Read from your silver table, aggregate to one row per customer,
-# MAGIC and derive a `risk_profile` column.
+# MAGIC Joins all three silver tables, aggregates to one row per customer,
+# MAGIC and derives a `risk_profile` column.
 # MAGIC
-# MAGIC **End goal:** a clean, typed, business-ready table queryable directly
-# MAGIC from Databricks SQL — no further transformation required.
+# MAGIC **Risk profile rules:**
+# MAGIC | Missed payments (last 12 months) | risk_profile |
+# MAGIC |---|---|
+# MAGIC | 0 | Low |
+# MAGIC | 1–2 | Medium |
+# MAGIC | 3+ | High |
 # MAGIC
-# MAGIC **Enter your schema name in the widget below before running.**
+# MAGIC Customers with missing payment_status on all repayments are flagged
+# MAGIC as Medium by default (unknown risk is not low risk).
 
 # COMMAND ----------
 
@@ -22,78 +27,142 @@ CATALOG       = "tesco_bank_training"
 SILVER_SCHEMA = f"{user_schema}_silver"
 GOLD_SCHEMA   = f"{user_schema}_gold"
 
-print(f"Reading from:  {CATALOG}.{SILVER_SCHEMA}.transactions")
-print(f"Writing to:    {CATALOG}.{GOLD_SCHEMA}.transactions")
+print(f"Reading from: {CATALOG}.{SILVER_SCHEMA}")
+print(f"Writing to:   {CATALOG}.{GOLD_SCHEMA}")
+
+# COMMAND ----------
+
+from pyspark.sql.functions import (
+    col, count, sum as _sum, avg, when,
+    countDistinct, round as _round, floor, 
+    datediff, current_date, max, year
+)
+
+customers    = spark.table(f"{CATALOG}.{SILVER_SCHEMA}.customers")
+transactions = spark.table(f"{CATALOG}.{SILVER_SCHEMA}.transactions")
+repayments   = spark.table(f"{CATALOG}.{SILVER_SCHEMA}.repayments")
+
+# COMMAND ----------
+
+txn_agg = (
+    transactions
+    .filter(~col("is_invalid_amount"))  # exclude invalid amounts from metrics
+    .groupBy("customer_id")
+    .agg(
+        count("transaction_id").alias("total_transactions"),
+        _round(_sum("amount"), 2).alias("total_spend"),
+        _round(avg("amount"), 2).alias("avg_transaction_value"),
+        countDistinct("merchant_category").alias("distinct_merchant_categories"),
+        max(col("transaction_date")).alias("last_transaction_date")
+    ).withColumn("is_active", when(year(col("last_transaction_date")) > 2025, True).otherwise(False))
+)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Step 1: Aggregate per customer
+# MAGIC ### Step 2: Aggregate repayments per customer
 # MAGIC
-# MAGIC Produce one row per customer. Think about which metrics are meaningful
-# MAGIC for a credit risk output. At minimum include:
-# MAGIC - Total number of transactions
-# MAGIC - Total and average transaction value
-# MAGIC - Any fields relevant to deriving the risk profile
-# MAGIC
-# MAGIC Hint: use `groupBy` and `agg`
+# MAGIC Count missed payments to drive the risk profile.
+# MAGIC Missing status is treated conservatively (not assumed to be Paid).
 
 # COMMAND ----------
 
-# TODO: Read silver table and aggregate to one row per customer
-
+rep_agg = (
+    repayments
+    .groupBy("customer_id")
+    .agg(
+        count("repayment_id").alias("total_repayments"),
+        _sum(when(col("payment_status") == "Missed", 1).otherwise(0))
+            .alias("missed_payment_count"),
+        _sum(when(col("payment_status") == "Late", 1).otherwise(0))
+            .alias("late_payment_count"),
+        _sum(when(col("is_status_missing"), 1).otherwise(0))
+            .alias("unknown_status_count"),
+    )
+)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Step 2: Derive risk_profile
-# MAGIC
-# MAGIC Add a `risk_profile` column with values of **Low**, **Medium**, or **High**.
-# MAGIC Define your own business rules based on the data available.
-# MAGIC Be prepared to explain and justify your rules to the group.
-# MAGIC
-# MAGIC Hint: use `when` / `otherwise` from `pyspark.sql.functions`
+# MAGIC ### Step 3: Derive Customer Age
 
 # COMMAND ----------
 
-# TODO: Derive risk_profile column
-
+Customers_deriv = customers.withColumn(
+    "age",
+    floor(datediff(current_date(), col("date_of_birth")) / 365))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Step 3: Write to gold Delta table
-# MAGIC
-# MAGIC Write as a managed Delta table. Use `overwrite` mode.
+# MAGIC ### Step 4: Join everything to one row per customer
 
 # COMMAND ----------
 
-# TODO: Write to gold Delta table
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Step 4: Row count assertion
+gold_df = (
+    Customers_deriv
+    .join(txn_agg, on="customer_id", how="left")
+    .join(rep_agg, on="customer_id", how="left")
+)
 
 # COMMAND ----------
 
-# TODO: Assert the gold table is not empty
-
+display(gold_df)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Step 5: Summary query
+# MAGIC ### Step 5: Derive risk_profile
 # MAGIC
-# MAGIC Write a SQL query that returns the count of customers in each
-# MAGIC `risk_profile` category and their average transaction value.
-# MAGIC
-# MAGIC This is your final deliverable — make sure it runs cleanly.
+# MAGIC Based on missed payment count.
+# MAGIC Customers with no repayment records at all default to Medium
+# MAGIC (insufficient data to confirm low risk).
 
 # COMMAND ----------
 
-# TODO: Write your summary SQL query
-# Hint: use spark.sql(...) or %sql magic
+gold_df = gold_df.withColumn(
+    "risk_profile",
+    when(col("missed_payment_count") >= 3,                                    "High")
+    .when((col("missed_payment_count") >= 1) |
+          (col("unknown_status_count") > col("total_repayments") * 0.5),      "Medium")
+    .when(col("total_repayments").isNull(),                                    "Medium")
+    .otherwise("Low")
+)
 
+# COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### Step 6: Write to gold Delta table
+# MAGIC
+# MAGIC One row per customer, clean, typed, and queryable directly from Databricks SQL.
+
+# COMMAND ----------
+
+gold_df.write.format("delta") \
+    .mode("overwrite") \
+    .option("overwriteSchema", "true") \
+    .saveAsTable(f"{CATALOG}.{GOLD_SCHEMA}.customer_risk")
+
+count = spark.table(f"{CATALOG}.{GOLD_SCHEMA}.customer_risk").count()
+assert count > 0, "Gold write produced an empty table."
+print(f"Gold aggregate complete: {count} customer rows")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Step 7: Summary SQL query
+# MAGIC
+# MAGIC Count of customers per risk_profile category and their average transaction value.
+
+# COMMAND ----------
+
+display(
+    spark.table(f"{CATALOG}.{GOLD_SCHEMA}.customer_risk")
+    .select(
+        "customer_id", "first_name", "last_name",
+        "total_transactions", "total_spend", "avg_transaction_value",
+        "missed_payment_count", "risk_profile", "age", "is_active", "date_of_birth"
+    )
+    .orderBy("risk_profile", "customer_id")
+    .limit(20)
+)
