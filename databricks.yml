@@ -30,29 +30,13 @@ resources:
         - name: user_schema
           default: "${workspace.current_user.short_name}"
 
-      job_clusters:
-        - job_cluster_key: training_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: m5.xlarge
-            num_workers: 1
-            data_security_mode: USER_ISOLATION
-            aws_attributes:
-              availability: SPOT
-              first_on_demand: 1
-              ebs_volume_type: GENERAL_PURPOSE_SSD
-              ebs_volume_count: 1
-              ebs_volume_size: 32
-
       tasks:
         - task_key: bronze_script
-          job_cluster_key: training_cluster
           notebook_task:
             notebook_path: ./src/bronze.py
             source: WORKSPACE
 
         - task_key: silver_script
-          job_cluster_key: training_cluster
           notebook_task:
             notebook_path: ./src/silver.py
             source: WORKSPACE
@@ -60,7 +44,6 @@ resources:
             - task_key: bronze_script
 
         - task_key: gold_script
-          job_cluster_key: training_cluster
           notebook_task:
             notebook_path: ./src/gold.py
             source: WORKSPACE
