@@ -23,9 +23,9 @@ print(f"Target:  {CATALOG}.{SILVER_SCHEMA}")
 
 # COMMAND ----------
 
-silver_df = spark.table(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest").select(
-    F.lower(F.col("customer_id")),
-    F.upper(F.col("product_type")),
+silver_df = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.bronze_ingest").select(
+    F.lower(F.col("customer_id")).alias("customer_id"),
+    F.upper(F.col("product_type")).alias("product_type"),
     F.col("credit_limit"),
     F.col("city")
 )

@@ -1,4 +1,8 @@
 # Databricks notebook source
+from pyspark.sql.functions import current_timestamp, lit
+
+# COMMAND ----------
+
 dbutils.widgets.text("user_schema", "", "Your schema name (e.g. user_david_herbert)")
 user_schema = dbutils.widgets.get("user_schema").strip()
 
