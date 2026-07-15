@@ -1,6 +1,9 @@
 bundle:
   name: tesco-bank-training-environment
 
+variables:
+  
+
 targets:
   dev:
     default: true
@@ -62,3 +65,5 @@ resources:
             source: WORKSPACE
           depends_on:
             - task_key: silver_script
+      parameters:
+        ${var.deafult_job_parameters}
