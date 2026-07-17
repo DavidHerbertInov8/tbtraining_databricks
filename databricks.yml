@@ -1,5 +1,5 @@
 bundle:
-  name: tesco-bank-training-environment
+  name: tesco-bank-training-environment_cs
 
 targets:
   dev:
@@ -34,14 +34,14 @@ resources:
       tasks:
         - task_key: bronze_script
           notebook_task:
-            notebook_path: ./src/bronze_ingest.py
+            notebook_path: ./src/bronze_ingest_CS.py
             source: WORKSPACE
             base_parameters:
               user_schema: "{{job.parameters.user_schema}}"
 
         - task_key: silver_script
           notebook_task:
-            notebook_path: ./src/silver_clean.py
+            notebook_path: ./src/silver_clean_CS.py
             source: WORKSPACE
             base_parameters:
               user_schema: "{{job.parameters.user_schema}}"
@@ -50,7 +50,7 @@ resources:
 
         - task_key: gold_script
           notebook_task:
-            notebook_path: ./src/gold_aggregated.py
+            notebook_path: ./src/gold_aggregated_CS.py
             source: WORKSPACE
             base_parameters:
               user_schema: "{{job.parameters.user_schema}}"
