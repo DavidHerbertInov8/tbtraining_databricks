@@ -23,4 +23,36 @@ print(f"Target:  {CATALOG}.{GOLD_SCHEMA}")
 
 # COMMAND ----------
 
-gold_df = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.silver_clean").groupBy("city", "product_type").count()
+gold_df_customers = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.silver_cp_customers").select("*")
+
+gold_df_repayments = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.silver_cp_repayments").select("*")
+
+gold_df_transactions = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.silver_cp_transactions").select("*")
+   
+
+# COMMAND ----------
+
+# MAGIC %skip
+# MAGIC df_2 = df1.withColumn(
+# MAGIC     "risk_profile",
+# MAGIC     F.when(F.col("count") >= 2, "High")
+# MAGIC     .when(F.col("count") == 1, "Medium")
+# MAGIC     .otherwise("Low")
+# MAGIC )
+# MAGIC )
+
+# COMMAND ----------
+
+gold_df = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.silver_capstone").groupBy("city", "product_type").count()
+
+# COMMAND ----------
+
+# MAGIC %skip
+# MAGIC 3.	Gold Notebook
+# MAGIC a.	Aggregate the silver data to produce one row per customer. 
+# MAGIC b.	Derive a risk_profile column with values of Low, Medium or High (Customers with two or more late payments are classified as High Risk. Customers with exactly one late payment are classified as Medium Risk. Customers with no late payments are classified as Low Risk).
+# MAGIC c.	Derive an age column.
+# MAGIC d.	Derive an average transaction value column.
+# MAGIC e.	Derive an active customer column based on transaction date (Customer must have a transaction in the year 2025 or later).
+# MAGIC f.	Store the output as a managed Delta table in your gold schema (This should be an overwrite table).
+# MAGIC
