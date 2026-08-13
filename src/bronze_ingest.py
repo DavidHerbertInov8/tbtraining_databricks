@@ -1,8 +1,8 @@
 # Databricks notebook source
-# from pyspark.sql.functions import current_timestamp, lit
-
-# COMMAND ----------
-
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 dbutils.widgets.text("user_schema", "", "Your schema name (e.g. user_david_herbert)")
 user_schema = dbutils.widgets.get("user_schema").strip()
 
@@ -25,10 +25,37 @@ print(f"Target:  {CATALOG}.{BRONZE_SCHEMA}")
 
 # COMMAND ----------
 
+from pyspark.sql.functions import current_timestamp, lit
+
+# COMMAND ----------
+
 raw_data = spark.table("tesco_bank_training.datasets.customers").select(
-    "*", current_timestamp().alias("ingestion_timestamp")
+    "*", current_timestamp().alias("ingestion_timestamp"), lit("customers").alias("source_file")
 )
 
 # COMMAND ----------
 
-raw_data.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest")
+raw_data.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_customer")
+
+# COMMAND ----------
+
+raw_data_r = spark.table("tesco_bank_training.datasets.repayments").select(
+    "*", current_timestamp().alias("ingestion_timestamp"), lit("repayments").alias("source_file")
+)
+
+# COMMAND ----------
+
+raw_data_r.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_repayments")
+
+# COMMAND ----------
+
+raw_data_t = spark.table("tesco_bank_training.datasets.transactions").select(
+    "*", current_timestamp().alias("ingestion_timestamp"), lit("transactions").alias("source_file")
+)
+
+# COMMAND ----------
+
+raw_data_t.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_transactions")
+
+# COMMAND ----------
+
