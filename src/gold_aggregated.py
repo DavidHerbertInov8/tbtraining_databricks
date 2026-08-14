@@ -38,40 +38,42 @@ customers = spark.table(input_customers_table).select("customer_id")
 
 # COMMAND ----------
 
-# New column at_risk with values Low, Medium or High; aggregated per customer
-late_repayments = spark.table(input_repayments_table).where("payment_status = 'Late' or payment_status = 'Missed'").groupBy('customer_id').agg(F.count("payment_status").alias("late_payments"))
+# New column risk_profile with values Low, Medium or High; aggregated per customer
+late_repayments = spark.table(input_repayments_table).where("payment_status = 'Late' or payment_status = 'Missed'").groupBy("customer_id").agg(F.count("payment_status").alias("late_payments"))
 
 customer_late_repayments = customers.join(late_repayments, on=["customer_id"], how="left").fillna(0, subset=["late_payments"])
 
-customer_at_risk = customer_late_repayments.withColumn("at_risk", F.when(F.col("late_payments") == 0, "Low").when(F.col("late_payments") == 1, "Medium").otherwise("High")).select("customer_id","at_risk")
+customer_at_risk = customer_late_repayments.withColumn("risk_profile", F.when(F.col("late_payments") == 0, "Low").when(F.col("late_payments") == 1, "Medium").otherwise("High")).select("customer_id","risk_profile")
 
 # COMMAND ----------
 
 # New age column
-customer_age = 
+customer_age = spark.table(input_customers_table).withColumn('age', (F.months_between(F.current_date(),F.col("date_of_birth"))/12).cast("int")).select("customer_id","age")
 
 # COMMAND ----------
 
 # New average transaction value column
+customer_avg_tran = spark.table(input_transactions_table).groupBy("customer_id").agg(F.avg("amount").alias("avg_tran").cast("decimal(10,2)"))
+ 
 
 
 # COMMAND ----------
 
-display(customer_at_risk)
+# New active customer column
+customer_max_tran = spark.table(input_transactions_table).groupBy("customer_id").agg(F.max("transaction_date").alias("last_tran"))
+
+customer_active = customer_max_tran.withColumn("active_customer", F.when(F.year(F.col("last_tran")) >= 2025, "Y").otherwise("N")).select("customer_id","active_customer")
 
 # COMMAND ----------
 
-display(spark.table(input_repayments_table))
+# Combine all new variables together into one final table
+gold_final = customer_at_risk.join(customer_age, on=["customer_id"], how="left").join(customer_avg_tran, on=["customer_id"], how="left").join(customer_active, on=["customer_id"], how="left")
 
 # COMMAND ----------
 
-transactions_check = spark.table(input_repayments_table).select("payment_status")
-distinct_column = transactions_check.dropDuplicates(["payment_status"]).select("payment_status")
-display(distinct_column)
+# Write out final table to gold and check if 0 obs
+gold_final.write.mode("overwrite").saveAsTable(output_final_table)
 
-# COMMAND ----------
-
-gold_df = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.silver_clean").groupBy("city", "product_type").count()
-
-# COMMAND ----------
-
+obs_check = spark.table(output_final_table).select(F.count("*")).collect()[0][0]
+if obs_check == 0:
+    raise ValueError("O observations in the gold_final table")
