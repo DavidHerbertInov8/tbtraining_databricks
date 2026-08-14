@@ -77,6 +77,6 @@ transactions = transactions.select("*", current_timestamp().alias("ingested_at")
 # COMMAND ----------
 
 # c. Store the output as a managed Delta table in your bronze schema (This should be done as an overwrite)
-customers.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_customer")
-repayments.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_repayments")
-transactions.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_transactions")
+customers.write.format("iceberg").mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_customers")
+repayments.write.format("iceberg").mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_repayments")
+transactions.write.format("iceberg").mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_transactions")
