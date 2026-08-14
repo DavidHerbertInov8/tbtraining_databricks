@@ -70,8 +70,6 @@ gold_repay = (customer_payment_counts.withColumn(
      .otherwise("Low")
 ).select("customer_id", "risk_profile"))
 
-display(gold_repay)
-
 # COMMAND ----------
 
 #Transaction variables
@@ -90,7 +88,6 @@ gold_trans = (avg_trans.select("customer_id", "avg_trans")
                         on="customer_id", 
                         how = 'left'))
 
-display(gold_trans)
 
 # COMMAND ----------
 
@@ -108,5 +105,13 @@ gold_final = (gold_cust
 # COMMAND ----------
 
 display(gold_final)
-#display(gold_dft.limit(10))
-#display(repayments_df.limit(50))
+
+# COMMAND ----------
+
+if gold_final.limit(1).count() == 0:
+    raise ValueError("Error: Gold Final table has zero observations")
+
+gold_final.write.mode("overwrite").saveAsTable(f"{CATALOG}.{GOLD_SCHEMA}.gold_final")
+
+# COMMAND ----------
+

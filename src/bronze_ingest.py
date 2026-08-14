@@ -35,6 +35,10 @@ raw_data = spark.table("tesco_bank_training.datasets.customers").select(
 
 # COMMAND ----------
 
+if raw_data.limit(1).count() == 0:
+    raise ValueError("Error: Bronze Customer table has zero observations")
+
+
 raw_data.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_customer")
 
 # COMMAND ----------
@@ -44,6 +48,9 @@ raw_data_r = spark.table("tesco_bank_training.datasets.repayments").select(
 )
 
 # COMMAND ----------
+
+if raw_data_r.limit(1).count() == 0:
+    raise ValueError("Error: Bronze Repayment table has zero observations")
 
 raw_data_r.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_repayments")
 
@@ -55,7 +62,7 @@ raw_data_t = spark.table("tesco_bank_training.datasets.transactions").select(
 
 # COMMAND ----------
 
+if raw_data_t.limit(1).count() == 0:
+    raise ValueError("Error: Bronze Transaction table has zero observations")
+
 raw_data_t.write.mode("overwrite").saveAsTable(f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_transactions")
-
-# COMMAND ----------
-

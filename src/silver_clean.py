@@ -65,7 +65,10 @@ display(silver_df.limit(30))
 
 # COMMAND ----------
 
-#silver_df.write.mode("overwrite").saveAsTable(f"{CATALOG}.{SILVER_SCHEMA}.silver_clean_cust")
+if silver_df.limit(1).count() == 0:
+    raise ValueError("Error: Silver Customer table has zero observations")
+
+silver_df.write.mode("overwrite").saveAsTable(f"{CATALOG}.{SILVER_SCHEMA}.silver_clean_cust")
 
 #to write as iceberg
 #silver_df.write.format("iceberg").mode("overwrite").saveAsTable(f"{CATALOG}.{SILVER_SCHEMA}.silver_clean")
@@ -73,3 +76,59 @@ display(silver_df.limit(30))
 # COMMAND ----------
 
 silver_dfr = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.bronze_ingest_repayments").select(
+    F.trim(F.upper(F.col("repayment_id"))).alias("repayment_id"), 
+    F.trim(F.upper(F.col("customer_id"))).alias("customer_id"),
+    F.coalesce(F.try_to_date("due_date", 'dd/mm/yyyy'), 
+               F.try_to_date("due_date", 'yyyy-MM-dd'),
+               F.try_to_date("due_date", 'dd-MM-yyyy'),
+               F.try_to_date("due_date", 'yyyy/MM/dd'),
+               F.try_to_date("due_date", 'dd MMM yyyy')
+               ).alias("due_date"),
+    F.col("amount_due").cast("decimal(18,2)").alias("amount_due"),
+    F.col("amount_paid").cast("decimal(18,2)").alias("amount_paid"),
+    F.col("payment_status"),
+    F.col("ingestion_timestamp"),
+    F.col("source_file")
+    )
+
+
+# COMMAND ----------
+
+display(silver_dfr.limit(30))
+
+# COMMAND ----------
+
+if silver_dfr.limit(1).count() == 0:
+    raise ValueError("Error: Silver Repayments table has zero observations")
+
+silver_dfr.write.mode("overwrite").saveAsTable(f"{CATALOG}.{SILVER_SCHEMA}.silver_clean_repay")
+
+# COMMAND ----------
+
+silver_dft = spark.table(f"{CATALOG}.{SOURCE_SCHEMA}.bronze_ingest_transactions").select(
+    F.trim(F.upper(F.col("transaction_id"))).alias("transaction_id"),
+    F.trim(F.upper(F.col("customer_id"))).alias("customer_id"),
+    F.coalesce(F.try_to_date("transaction_date", 'dd/mm/yyyy'), 
+               F.try_to_date("transaction_date", 'yyyy-MM-dd'),
+               F.try_to_date("transaction_date", 'dd-MM-yyyy'),
+               F.try_to_date("transaction_date", 'yyyy/MM/dd'),
+               F.try_to_date("transaction_date", 'dd MMM yyyy')
+               ).alias("transaction_date"),
+    F.col("amount").cast("decimal(18,2)").alias("amount"), 
+    F.trim(F.initcap(F.col("transaction_type"))).alias("transaction_type"),
+    F.trim(F.initcap(F.col("merchant_category"))).alias("merchant_category"),
+    F.col("ingestion_timestamp"),
+    F.col("source_file")
+    )
+
+
+# COMMAND ----------
+
+display(silver_dft.limit(30))
+
+# COMMAND ----------
+
+if silver_dft.limit(1).count() == 0:
+    raise ValueError("Error: Silver Transactions table has zero observations")
+
+silver_dft.write.mode("overwrite").saveAsTable(f"{CATALOG}.{SILVER_SCHEMA}.silver_clean_trans")
