@@ -29,56 +29,24 @@ print(f"Target:  {CATALOG}.{BRONZE_SCHEMA}")
 
 # COMMAND ----------
 
-input_customers_table = f"{CATALOG}.{SOURCE_SCHEMA}.customers"
-input_repayments_table = f"{CATALOG}.{SOURCE_SCHEMA}.repayments"
-input_transactions_table = f"{CATALOG}.{SOURCE_SCHEMA}.transactions"
+input_customers = f"{CATALOG}.{SOURCE_SCHEMA}.customers"
+input_repayments = f"{CATALOG}.{SOURCE_SCHEMA}.repayments"
+input_transactions = f"{CATALOG}.{SOURCE_SCHEMA}.transactions"
 
-output_customers_table = f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_customers"
-output_repayments_table = f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_repayments"
-output_transactions_table = f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_transactions"
+output_customers = f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_customers"
+output_repayments = f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_repayments"
+output_transactions = f"{CATALOG}.{BRONZE_SCHEMA}.bronze_ingest_transactions"
 
-
-# COMMAND ----------
-
-# Customers dataset
-raw_data_customers = spark.table(input_customers_table).select(
-    "*", current_timestamp().alias("ingested_at"), lit("customers").alias("source_file"))
 
 # COMMAND ----------
 
-# Repayments dataset
-raw_data_repayments = spark.table(input_repayments_table).select(
-    "*", current_timestamp().alias("ingested_at"), lit("repayments").alias("source_file"))
+# Add new variables to each of the tables and write them out; check if final table has 0 obs
+main_tables = {"customers": [input_customers, output_customers], "repayments": [input_repayments, output_repayments], "transactions": [input_transactions, output_transactions]}
 
-# COMMAND ----------
-
-# Transactions dataset
-raw_data_transactions = spark.table(input_transactions_table).select(
-    "*", current_timestamp().alias("ingested_at"), lit("transactions").alias("source_file"))
-
-# COMMAND ----------
-
-# Write out customer table to bronze and check if 0 obs
-raw_data_customers.write.mode("overwrite").saveAsTable(output_customers_table)
-
-customers_check = spark.table(output_customers_table).select(count("customer_id")).collect()[0][0]
-if customers_check == 0:
-    raise ValueError("O observations in the bronze_ingest_customers table")
-
-# COMMAND ----------
-
-# Write out repayments table to bronze and check if 0 obs
-raw_data_repayments.write.mode("overwrite").saveAsTable(output_repayments_table)
-
-repayments_check = spark.table(output_repayments_table).select(count("repayment_id")).collect()[0][0]
-if repayments_check == 0:
-    raise ValueError("O observations in the bronze_ingest_repayments table")
-
-# COMMAND ----------
-
-# Write out transactions table to bronze and check if 0 obs
-raw_data_transactions.write.mode("overwrite").saveAsTable(output_transactions_table)
-
-transactions_check = spark.table(output_transactions_table).select(count("transaction_id")).collect()[0][0]
-if transactions_check == 0:
-    raise ValueError("O observations in the bronze_ingest_transations table")
+for table_type, table_names in main_tables.items():
+    spark.table(table_names[0]).select(
+        "*", current_timestamp().alias("ingested_at"), lit(f"{table_type}").alias("source_file")).write.mode("overwrite").saveAsTable(table_names[1])
+    
+    check_obs = spark.table(table_names[1]).select(count("*")).collect()[0][0]
+    if check_obs == 0:
+        raise ValueError(f"O observations in the {table_names[1]}")
